@@ -74,6 +74,8 @@ import app.grapheneos.camera.capturer.ImageCapturer
 import app.grapheneos.camera.capturer.VideoCapturer
 import app.grapheneos.camera.capturer.getVideoThumbnail
 import app.grapheneos.camera.data.core.model.CameraMode
+import app.grapheneos.camera.data.media.repository.CapturedItemRepository
+import app.grapheneos.camera.data.settings.repository.SettingsRepository
 import app.grapheneos.camera.shareCapturedItem
 import app.grapheneos.camera.databinding.ActivityMainBinding
 import app.grapheneos.camera.databinding.ScanResultDialogBinding
@@ -100,21 +102,30 @@ import com.google.android.material.imageview.ShapeableImageView
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.tabs.TabLayout
 import com.google.zxing.BarcodeFormat
+import dagger.hilt.android.AndroidEntryPoint
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.inject.Inject
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
+@AndroidEntryPoint
 open class MainActivity : AppCompatActivity(),
     OnTouchListener,
     OnScaleGestureListener,
     GestureDetector.OnGestureListener,
     GestureDetector.OnDoubleTapListener,
     SensorOrientationChangeNotifier.Listener {
+
+    @Inject
+    lateinit var settingsRepository: SettingsRepository
+
+    @Inject
+    lateinit var capturedItemRepository: CapturedItemRepository
 
     private val application: App
         get() = applicationContext as App
@@ -561,7 +572,7 @@ open class MainActivity : AppCompatActivity(),
         }
 
         if (this !is SecureActivity) {
-            camConfig.fetchLastCapturedItemFromSharedPrefs()
+            camConfig.fetchLastCapturedItem()
         }
 
         updateThumbnail()
@@ -614,7 +625,11 @@ open class MainActivity : AppCompatActivity(),
 
         gestureDetector = GestureDetector(this, this)
 
-        camConfig = CamConfig(this)
+        camConfig = CamConfig(
+            mActivity = this,
+            settingsRepository = settingsRepository,
+            capturedItemRepository = capturedItemRepository,
+        )
         cameraControl = CameraControl(camConfig)
         mainOverlay = binding.mainOverlay
         imageCapturer = ImageCapturer(this)
@@ -1719,6 +1734,7 @@ open class MainActivity : AppCompatActivity(),
         super.onDestroy()
         SensorOrientationChangeNotifier.clearInstance()
         thumbnailLoaderExecutor.shutdownNow()
+        camConfig.onDestroy()
     }
 
     fun locationCamConfigChanged(required: Boolean) {
